@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electromagnetic-Wave-Visualizer</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #eeeeee;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        #container {
+            width: 900px;
+            background-color: #111111;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background-color: #111111;
+            border-bottom: 1px dashed #262626;
+            width: 100%;
+            height: 400px;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+        }
+        input[type="number"] {
+            background-color: #222;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 8px;
+            font-size: 16px;
+            width: 100px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .info-panel {
+            background-color: #111111;
+            padding: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <canvas id="waveCanvas"></canvas>
+    
+    <div class="controls">
+        <label for="wlInput">Wavelength (nm): </label>
+        <input type="number" id="wlInput" value="380" min="1">
+    </div>
+
+    <div class="info-panel" id="infoPanel"></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+    const wlInput = document.getElementById('wlInput');
+    const infoPanel = document.getElementById('infoPanel');
+
+    // Resize canvas for high DPI displays
+    function resizeCanvas() {
+        canvas.width = canvas.clientWidth * window.devicePixelRatio;
+        canvas.height = canvas.clientHeight * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+
+    // Constants
+    const C = 2.99792458e8;
+    const H = 6.62607015e-34;
+    const AU = 1.495978707e11;
+    const LIGHT_YEAR = 9.4607304725808e15;
+
+    let currentWl = 380;
+    let t = 0;
+
+    function formatFrequency(freqHz) {
+        if (freqHz >= 1e12) return `${(freqHz / 1e12).toFixed(4)} THz`;
+        if (freqHz >= 1e9) return `${(freqHz / 1e9).toFixed(4)} GHz`;
+        if (freqHz >= 1e6) return `${(freqHz / 1e6).toFixed(4)} MHz`;
+        if (freqHz >= 1e3) return `${(freqHz / 1e3).toFixed(4)} kHz`;
+        return `${freqHz.toFixed(4)} Hz`;
+    }
+
+    function getSpatialScale(maxMeters) {
+        if (maxMeters >= LIGHT_YEAR * 0.1) return { factor: LIGHT_YEAR, name: "light-years" };
+        if (maxMeters >= AU * 0.1) return { factor: AU, name: "AU" };
+        if (maxMeters >= 1000.0) return { factor: 1000.0, name: "km" };
+        if (maxMeters >= 1.0) return { factor: 1.0, name: "meters" };
+        if (maxMeters >= 0.01) return { factor: 0.01, name: "cm" };
+        if (maxMeters >= 0.001) return { factor: 0.001, name: "mm" };
+        if (maxMeters >= 1e-6) return { factor: 1e-6, name: "µm" };
+        return { factor: 1e-9, name: "nm" };
+    }
+
+    function wavelengthToRgbCie(wl) {
+        if (wl < 380 || wl > 780) return "rgb(0,0,0)";
+        
+        let x1 = 1.056 * Math.exp(-0.5 * Math.pow((wl - 599.8) / 37.9, 2));
+        let x2 = 0.362 * Math.exp(-0.5 * Math.pow((wl - 442.0) / 16.0, 2));
+        let x3 = -0.065 * Math.exp(-0.5 * Math.pow((wl - 501.1) / 20.4, 2));
+        let X = Math.max(0.0, x1 + x2 + x3);
+
+        let Y = 0.821 * Math.exp(-0.5 * Math.pow((wl - 568.8) / 46.9, 2)) + 0.286 * Math.exp(-0.5 * Math.pow((wl - 530.9) / 16.3, 2));
+        let Z = 1.217 * Math.exp(-0.5 * Math.pow((wl - 437.0) / 11.8, 2)) + 0.681 * Math.exp(-0.5 * Math.pow((wl - 459.0) / 26.0, 2));
+
+        let r_lin =  3.2404542 * X - 1.5371385 * Y - 0.4985314 * Z;
+        let g_lin = -0.9692660 * X + 1.8760108 * Y + 0.0415560 * Z;
+        let b_lin =  0.0556434 * X - 0.2040259 * Y + 1.0572252 * Z;
+
+        r_lin = Math.max(0.0, r_lin); g_lin = Math.max(0.0, g_lin); b_lin = Math.max(0.0, b_lin);
+
+        let factor = 1.0;
+        if (wl < 420.0) factor = 0.3 + 0.7 * (wl - 380.0) / (420.0 - 380.0);
+        else if (wl > 700.0) factor = 0.3 + 0.7 * (780.0 - wl) / (780.0 - 700.0);
+
+        r_lin *= factor; g_lin *= factor; b_lin *= factor;
+
+        const gamma = (val) => val <= 0.0031308 ? 12.92 * val : 1.055 * Math.pow(val, 1.0 / 2.4) - 0.055;
+
+        let r = Math.min(1.0, Math.max(0.0, gamma(r_lin)));
+        let g = Math.min(1.0, Math.max(0.0, gamma(g_lin)));
+        let b = Math.min(1.0, Math.max(0.0, gamma(b_lin)));
+
+        let max_val = Math.max(r, g, b);
+        if (max_val > 0) {
+            let boost = 1.0 / Math.pow(max_val, 0.1);
+            r = Math.min(1.0, r * boost); g = Math.min(1.0, g * boost); b = Math.min(1.0, b * boost);
+        }
+
+        return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+    }
+
+    function draw() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+
+        const wavelength_m = currentWl * 1e-9;
+        const total_length = 8 * wavelength_m;
+        const scale = getSpatialScale(total_length);
+
+        // Draw grid
+        ctx.strokeStyle = '#262626';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for(let i=0; i<=8; i++) {
+            let xPos = (i / 8) * w;
+            ctx.moveTo(xPos, 0); ctx.lineTo(xPos, h);
+        }
+        for(let i=0; i<=4; i++) {
+            let yPos = (i / 4) * h;
+            ctx.moveTo(0, yPos); ctx.lineTo(w, yPos);
+        }
+        ctx.stroke();
+
+        // Draw Wave
+        const k = (2 * Math.PI) / (w / 8); 
+        const color = wavelengthToRgbCie(currentWl);
+
+        // Colored Backing Wave
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        for (let x = 0; x < w; x++) {
+            let y = (h / 2) + Math.sin(k * x - 2 * Math.PI * t) * (h * 0.4);
+            if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // White Core Line
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Axes labels & values
+        ctx.fillStyle = '#bbbbbb';
+        ctx.font = '12px monospace';
+        
+        // X-axis label
+        ctx.fillText(`Position along propagation (${scale.name})`, w/2 - 140, h - 10);
+        ctx.fillText(`0`, 5, h - 25);
+        ctx.fillText(`${(total_length / scale.factor).toFixed(2)}`, w - 45, h - 25);
+
+        // Y-axis label (Rotated to match Matplotlib style)
+        ctx.save();
+        ctx.translate(15, h / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = "center";
+        ctx.fillText("Electric Field Strength (V/m or N/C)", 0, 0);
+        ctx.restore();
+
+        // Update Text Info
+        const freq = C / wavelength_m;
+        const energy = (H * freq) / 1.60217662e-19;
+        infoPanel.innerText = `Wavelength : ${currentWl} nm\nFrequency  : ${formatFrequency(freq)}\nEnergy     : ${energy.toFixed(6)} eV`;
+
+        t += 0.016; 
+        requestAnimationFrame(draw);
+    }
+
+    function handleUpdate() {
+        let val = parseInt(wlInput.value);
+        if (val >= 1) currentWl = val;
+        else wlInput.value = currentWl;
+    }
+
+    wlInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleUpdate(); });
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+    draw();
+</script>
+
+</body>
+</html>
