@@ -1,0 +1,1 @@
+Comparative Micro-Cap simulation of two nearly identical two-stage CMOS op-amps (differential input, current-mirror loads, Miller-compensated) evaluating AC response, DC transfer, and harmonic/IMD performance under 10V supplies.
