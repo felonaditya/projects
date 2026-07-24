@@ -1,0 +1,1 @@
+A discrete three-stage transistor audio amplifier (common-emitter input Q1 + driver Q2 + output Q3) built in Micro-Cap 12, delivering clean amplification with good frequency response up to ~10-20 MHz roll-off, proper DC biasing, low-distortion sine wave output, and harmonic / intermodulation analysis.
